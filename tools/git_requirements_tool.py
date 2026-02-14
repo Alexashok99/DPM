@@ -1,0 +1,1347 @@
+"""Tool for Git and requirements management."""
+
+import os
+import subprocess
+import sys
+from typing import Tuple, List, Optional
+from tools.base_tool import BaseTool
+from util.utils import Utils
+
+
+class GitRequirementsTool(BaseTool):
+    """Manage .gitignore, requirements.txt, and Git operations."""
+
+    name = "🔧 Git & Requirements"
+    description = "Manage .gitignore, requirements.txt, install packages"
+
+    def run(self) -> None:
+        """Display Git and requirements management menu."""
+        while True:
+            Utils.clear_screen()
+            Utils.print_header("GIT & REQUIREMENTS MANAGER")
+
+            print("\n1. Create/Update .gitignore")
+            print("2. Generate requirements.txt")
+            print("3. Install from requirements.txt")
+            print("4. Show .gitignore content")
+            print("5. Check Git status")
+            print("6. Git initialization helpers")
+            print("7. Back to Main Menu")
+
+            choice = input("\nSelect option (1-7): ").strip()
+
+            if choice == "1":
+                self._manage_gitignore()
+            elif choice == "2":
+                self._generate_requirements()
+            elif choice == "3":
+                self._install_requirements()
+            elif choice == "4":
+                self._show_gitignore()
+            elif choice == "5":
+                self._check_git_status()
+            elif choice == "6":
+                self._git_helpers()
+            elif choice == "7":
+                break
+            else:
+                print("❌ Invalid option")
+
+            if choice != "7":
+                input("\nPress Enter to continue...")
+
+    def _manage_gitignore(self) -> None:
+        """Create or update .gitignore file."""
+        Utils.clear_screen()
+        Utils.print_header("MANAGE .GITIGNORE")
+
+        current_dir = os.getcwd()
+        gitignore_path = os.path.join(current_dir, ".gitignore")
+
+        # Check if .gitignore exists
+        if os.path.exists(gitignore_path):
+            print("📄 .gitignore file exists.")
+            print(f"📍 Location: {gitignore_path}")
+            print(f"📏 Size: {self._format_size(os.path.getsize(gitignore_path))}")
+
+            with open(gitignore_path, "r", encoding="utf-8") as f:
+                current_content = f.read()
+                lines = len(current_content.split("\n"))
+                print(f"📊 Lines: {lines}")
+
+            print("\nOptions:")
+            print("1. View current content")
+            print("2. Update with template")
+            print("3. Add custom patterns")
+            print("4. Delete and create new")
+
+            choice = input("\nSelect option (1-4): ").strip()
+
+            if choice == "1":
+                self._show_gitignore()
+                return
+            elif choice == "3":
+                self._add_gitignore_patterns(gitignore_path, current_content)
+                return
+            elif choice == "4":
+                confirm = input(
+                    "⚠️ Delete existing .gitignore and create new? (y/n): "
+                ).lower()
+                if confirm != "y":
+                    print("❌ Operation cancelled.")
+                    return
+        else:
+            print("ℹ️  No .gitignore file found.")
+            print("📍 Current directory:", current_dir)
+            choice = "2"  # Default to create new
+
+        if choice == "2":
+            self._create_gitignore_template(gitignore_path)
+
+    def _create_gitignore_template(self, gitignore_path: str) -> None:
+        """Create .gitignore with comprehensive template.
+
+        Args:
+            gitignore_path: Path to .gitignore file.
+        """
+        print("\n📝 Select template type:")
+        print("1. Python Project")
+        print("2. Django Project")
+        print("3. Node.js Project")
+        print("4. General Project")
+        print("5. Custom (manual entry)")
+
+        template_choice = input("\nSelect template (1-5): ").strip()
+
+        if template_choice == "1":
+            content = self._get_python_gitignore()
+        elif template_choice == "2":
+            content = self._get_django_gitignore()
+        elif template_choice == "3":
+            content = self._get_nodejs_gitignore()
+        elif template_choice == "4":
+            content = self._get_general_gitignore()
+        elif template_choice == "5":
+            content = input("Enter .gitignore content (end with empty line):\n")
+            # Support multi-line input
+            lines = []
+            while True:
+                line = input()
+                if line == "":
+                    break
+                lines.append(line)
+            content = "\n".join(lines)
+        else:
+            print("❌ Invalid choice, using Python template.")
+            content = self._get_python_gitignore()
+
+        # Add header
+        header = "# .gitignore - Generated by Scripts_module\n"
+        header += "# Last updated: " + self._get_current_timestamp() + "\n\n"
+        content = header + content
+
+        try:
+            with open(gitignore_path, "w", encoding="utf-8") as f:
+                f.write(content)
+
+            print(f"✅ .gitignore created at: {gitignore_path}")
+            print(
+                f"📏 File size: {self._format_size(os.path.getsize(gitignore_path))} bytes"
+            )
+
+            # Show preview
+            preview = input("\nShow file preview? (y/n): ").lower()
+            if preview == "y":
+                print("\n📄 .gitignore Preview:")
+                print("-" * 50)
+                with open(gitignore_path, "r", encoding="utf-8") as f:
+                    lines = f.readlines()
+                    for i, line in enumerate(lines[:30]):  # Show first 30 lines
+                        print(line.rstrip())
+                    if len(lines) > 30:
+                        print(f"... and {len(lines) - 30} more lines")
+                print("-" * 50)
+
+        except Exception as e:
+            print(f"❌ Failed to create .gitignore: {e}")
+
+    def _add_gitignore_patterns(
+        self, gitignore_path: str, current_content: str
+    ) -> None:
+        """Add custom patterns to existing .gitignore.
+
+        Args:
+            gitignore_path: Path to .gitignore file.
+            current_content: Current content of .gitignore.
+        """
+        print("\n📝 Add patterns to .gitignore")
+        print("Enter patterns (one per line, empty line to finish):")
+        print("Examples:")
+        print("  *.log")
+        print("  /temp/")
+        print("  config/local.py")
+        print()
+
+        new_patterns = []
+        while True:
+            pattern = input().strip()
+            if pattern == "":
+                break
+            if pattern and not pattern.startswith("#"):
+                new_patterns.append(pattern)
+
+        if not new_patterns:
+            print("❌ No patterns added.")
+            return
+
+        # Add new patterns with timestamp comment
+        updated_content = current_content.rstrip() + "\n\n"
+        updated_content += f"# Added on {self._get_current_timestamp()}\n"
+        for pattern in new_patterns:
+            updated_content += f"{pattern}\n"
+
+        try:
+            with open(gitignore_path, "w", encoding="utf-8") as f:
+                f.write(updated_content)
+
+            print(f"✅ Added {len(new_patterns)} pattern(s) to .gitignore")
+
+        except Exception as e:
+            print(f"❌ Failed to update .gitignore: {e}")
+
+    def _generate_requirements(self) -> None:
+        """Generate requirements.txt from installed packages."""
+        Utils.clear_screen()
+        Utils.print_header("GENERATE REQUIREMENTS.TXT")
+
+        current_dir = os.getcwd()
+        requirements_path = os.path.join(current_dir, "requirements.txt")
+
+        print(f"📍 Current directory: {current_dir}")
+
+        # Check if in virtual environment
+        in_venv = hasattr(sys, "real_prefix") or (
+            hasattr(sys, "base_prefix") and sys.base_prefix != sys.prefix
+        )
+
+        if in_venv:
+            print("✅ Running in virtual environment")
+            if "VIRTUAL_ENV" in os.environ:
+                print(f"   Virtual env: {os.environ['VIRTUAL_ENV']}")
+        else:
+            print("⚠️  Not in virtual environment")
+            print("   This will capture ALL system packages.")
+            confirm = input("\nContinue? (y/n): ").lower()
+            if confirm != "y":
+                print("❌ Operation cancelled.")
+                return
+
+        print("\n🔧 Options for requirements.txt:")
+        print("1. Generate with exact versions (pip freeze)")
+        print("2. Generate without version pins (names only)")
+        print("3. Generate from pyproject.toml (if exists)")
+
+        choice = input("\nSelect option (1-3): ").strip()
+
+        if choice == "1":
+            success, output = self._run_command([sys.executable, "-m", "pip", "freeze"])
+            mode = "exact versions"
+        elif choice == "2":
+            # Generate freeze first, then strip versions
+            success, output = self._run_command([sys.executable, "-m", "pip", "freeze"])
+            if success and output:
+                lines = []
+                for line in output.strip().split("\n"):
+                    # Handle comments or editable installs
+                    if line.startswith("-e") or line.startswith("#"):
+                        lines.append(line)
+                        continue
+                    # Strip version logic (handles ==, >=, @, etc.)
+                    parts = (
+                        line.replace("==", " ")
+                        .replace(">=", " ")
+                        .replace("@", " ")
+                        .split()
+                    )
+                    if parts:
+                        lines.append(parts[0])
+                output = "\n".join(lines)
+            mode = "package names only"
+        elif choice == "3":
+            pyproject_path = os.path.join(current_dir, "pyproject.toml")
+            if os.path.exists(pyproject_path):
+                print("📦 Extracting dependencies from pyproject.toml...")
+                output = self._extract_from_pyproject(pyproject_path)
+                success = bool(output)
+                mode = "pyproject.toml"
+            else:
+                print("❌ pyproject.toml not found.")
+                return
+        else:
+            print("❌ Invalid option.")
+            return
+
+        if not success or not output:
+            print("❌ Failed to generate requirements.txt")
+            return
+
+        # Check if file exists
+        if os.path.exists(requirements_path):
+            with open(requirements_path, "r", encoding="utf-8") as f:
+                existing_content = f.read()
+
+            print(f"\n⚠️  requirements.txt already exists.")
+            print(
+                f"   Current size: {self._format_size(os.path.getsize(requirements_path))}"
+            )
+            print(f"   Current lines: {len(existing_content.splitlines())}")
+
+            action = input("\nOverwrite, Merge, or Cancel? (o/m/c): ").lower()
+
+            if action == "c":
+                print("❌ Operation cancelled.")
+                return
+            elif action == "m":
+                # --- FIXED SMART MERGE LOGIC ---
+                package_map = {}
+
+                # Helper to extract package name safely
+                def get_pkg_name(pkg_line):
+                    # Handle editable installs specifically
+                    if pkg_line.startswith("-e "):
+                        return pkg_line  # Use full line as key for editable
+                    # Remove version markers to get raw name
+                    normalized = (
+                        pkg_line.split("==")[0]
+                        .split(">=")[0]
+                        .split("<")[0]
+                        .split(" @ ")[0]
+                    )
+                    return normalized.strip().lower()
+
+                # 1. Process EXISTING file
+                for line in existing_content.splitlines():
+                    line = line.strip()
+                    # Skip comments/empty lines while parsing packages
+                    if not line or line.startswith("#"):
+                        continue
+                    name = get_pkg_name(line)
+                    package_map[name] = line
+
+                # 2. Process NEW generated output (Overwrites old versions)
+                for line in output.strip().split("\n"):
+                    line = line.strip()
+                    if not line or line.startswith("#"):
+                        continue
+                    name = get_pkg_name(line)
+                    package_map[name] = line
+
+                # 3. Sort packages alphabetically
+                sorted_packages = sorted(package_map.values(), key=lambda x: x.lower())
+                content = "\n".join(sorted_packages)
+                mode = "merged (smart)"
+            else:
+                # Overwrite
+                content = output
+        else:
+            content = output
+
+        # Add header
+        header = f"# requirements.txt - Generated by Scripts_module\n"
+        header += f"# Mode: {mode}\n"
+        header += f"# Date: {self._get_current_timestamp()}\n"
+        header += f"# Python: {sys.version.split()[0]}\n"
+
+        if in_venv:
+            header += f"# Virtual env: {os.environ.get('VIRTUAL_ENV', 'Unknown')}\n"
+
+        header += "\n"
+
+        try:
+            with open(requirements_path, "w", encoding="utf-8") as f:
+                f.write(header + content.strip() + "\n")  # Ensure trailing newline
+
+            stats = content.strip().split("\n")
+            print(f"\n✅ requirements.txt generated successfully!")
+            print(f"📍 File: {requirements_path}")
+            print(f"📏 Size: {self._format_size(os.path.getsize(requirements_path))}")
+            print(f"📊 Packages: {len(stats)}")
+            print(f"📝 Mode: {mode}")
+
+            # Show top packages
+            print("\n📦 Top packages:")
+            for i, pkg in enumerate(stats[:10]):
+                print(f"   {i+1}. {pkg}")
+            if len(stats) > 10:
+                print(f"   ... and {len(stats) - 10} more")
+
+        except Exception as e:
+            print(f"❌ Failed to write requirements.txt: {e}")
+
+    def _install_requirements(self) -> None:
+        """Install packages from requirements.txt."""
+        Utils.clear_screen()
+        Utils.print_header("INSTALL FROM REQUIREMENTS.TXT")
+
+        current_dir = os.getcwd()
+        requirements_path = os.path.join(current_dir, "requirements.txt")
+
+        if not os.path.exists(requirements_path):
+            print(f"❌ requirements.txt not found in {current_dir}")
+
+            # Search for requirements files
+            req_files = []
+            for file in os.listdir(current_dir):
+                if file.startswith("requirements") and file.endswith(".txt"):
+                    req_files.append(file)
+
+            if req_files:
+                print("\n📄 Found requirements files:")
+                for i, file in enumerate(req_files, 1):
+                    size = os.path.getsize(os.path.join(current_dir, file))
+                    print(f"   {i}. {file} ({self._format_size(size)})")
+
+                choice = input(f"\nSelect file (1-{len(req_files)}): ").strip()
+                if choice.isdigit():
+                    idx = int(choice) - 1
+                    if 0 <= idx < len(req_files):
+                        requirements_path = os.path.join(current_dir, req_files[idx])
+                    else:
+                        print("❌ Invalid selection.")
+                        return
+                else:
+                    print("❌ Invalid input.")
+                    return
+            else:
+                return
+
+        print(f"📄 File: {requirements_path}")
+        print(f"📏 Size: {self._format_size(os.path.getsize(requirements_path))}")
+
+        # Count packages
+        with open(requirements_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+            package_count = sum(
+                1 for line in lines if line.strip() and not line.startswith("#")
+            )
+
+        print(f"📊 Packages to install: {package_count}")
+
+        # Check if in virtual environment
+        in_venv = hasattr(sys, "real_prefix") or (
+            hasattr(sys, "base_prefix") and sys.base_prefix != sys.prefix
+        )
+        if not in_venv:
+            print("\n⚠️  WARNING: Not in virtual environment!")
+            print("   This will install packages globally.")
+            confirm = input("\nContinue anyway? (y/n): ").lower()
+            if confirm != "y":
+                print("❌ Operation cancelled.")
+                return
+
+        # Show first few packages
+        print("\n📦 Package preview:")
+        count = 0
+        for line in lines:
+            if line.strip() and not line.startswith("#"):
+                print(f"   • {line.strip()}")
+                count += 1
+                if count >= 5:
+                    if package_count > 5:
+                        print(f"   ... and {package_count - 5} more")
+                    break
+
+        print("\n🔧 Installation options:")
+        print("1. Install all packages")
+        print("2. Upgrade existing packages")
+        print("3. Install without dependencies")
+
+        choice = input("\nSelect option (1-3): ").strip()
+
+        if choice == "1":
+            cmd = [sys.executable, "-m", "pip", "install", "-r", requirements_path]
+            mode = "install"
+        elif choice == "2":
+            cmd = [
+                sys.executable,
+                "-m",
+                "pip",
+                "install",
+                "-r",
+                requirements_path,
+                "--upgrade",
+            ]
+            mode = "upgrade"
+        elif choice == "3":
+            cmd = [
+                sys.executable,
+                "-m",
+                "pip",
+                "install",
+                "-r",
+                requirements_path,
+                "--no-deps",
+            ]
+            mode = "no-dependencies"
+        else:
+            print("❌ Invalid option.")
+            return
+
+        confirm = input(f"\n⚠️  Install {package_count} packages? (y/n): ").lower()
+        if confirm != "y":
+            print("❌ Operation cancelled.")
+            return
+
+        print(f"\n🚀 Installing packages ({mode})...")
+        print("-" * 50)
+
+        success, output = self._run_command(cmd)
+
+        if success:
+            print("\n✅ Installation completed successfully!")
+
+            # Show summary
+            if output:
+                lines = output.strip().split("\n")
+                installed = [l for l in lines if "Successfully installed" in l]
+                if installed:
+                    print("\n📦 Installed packages:")
+                    for line in installed:
+                        # Extract package names
+                        if "Successfully installed" in line:
+                            packages = line.replace(
+                                "Successfully installed", ""
+                            ).strip()
+                            for pkg in packages.split():
+                                print(f"   • {pkg}")
+        else:
+            print(f"\n❌ Installation failed: {output}")
+
+        print("-" * 50)
+
+    def _show_gitignore(self) -> None:
+        """Show .gitignore content."""
+        Utils.clear_screen()
+        Utils.print_header(".GITIGNORE CONTENT")
+
+        current_dir = os.getcwd()
+        gitignore_path = os.path.join(current_dir, ".gitignore")
+
+        if not os.path.exists(gitignore_path):
+            print(f"❌ .gitignore not found in {current_dir}")
+            return
+
+        with open(gitignore_path, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        print(f"📍 File: {gitignore_path}")
+        print(f"📏 Size: {self._format_size(os.path.getsize(gitignore_path))}")
+        print(f"📊 Lines: {len(content.splitlines())}")
+
+        # Analyze patterns
+        lines = content.splitlines()
+        comment_lines = sum(1 for line in lines if line.strip().startswith("#"))
+        pattern_lines = sum(
+            1 for line in lines if line.strip() and not line.strip().startswith("#")
+        )
+        blank_lines = sum(1 for line in lines if not line.strip())
+
+        print(f"\n📈 Statistics:")
+        print(f"   • Total lines: {len(lines)}")
+        print(f"   • Patterns: {pattern_lines}")
+        print(f"   • Comments: {comment_lines}")
+        print(f"   • Blank lines: {blank_lines}")
+
+        # Show content with pagination
+        print("\n📄 Content:")
+        print("-" * 60)
+
+        for i, line in enumerate(lines):
+            if i < 50:  # Show first 50 lines
+                line_num = f"{i+1:3d}"
+                if line.strip().startswith("#"):
+                    print(f"{line_num}: \033[90m{line}\033[0m")  # Gray for comments
+                elif not line.strip():
+                    print(f"{line_num}:")
+                else:
+                    print(f"{line_num}: {line}")
+            else:
+                print(f"... and {len(lines) - 50} more lines")
+                break
+
+        print("-" * 60)
+
+    def _check_git_status(self) -> None:
+        """Check Git repository status."""
+        Utils.clear_screen()
+        Utils.print_header("GIT STATUS CHECK")
+
+        current_dir = os.getcwd()
+
+        # Check if in Git repository
+        git_dir = os.path.join(current_dir, ".git")
+        if not os.path.exists(git_dir):
+            print("❌ Not a Git repository.")
+            print(f"📍 Current directory: {current_dir}")
+
+            init = input("\nInitialize Git repository? (y/n): ").lower()
+            if init == "y":
+                self._run_command(["git", "init"])
+                print("✅ Git repository initialized.")
+            return
+
+        print(f"📍 Git repository: {current_dir}")
+
+        # Get Git status
+        print("\n🔍 Repository Status:")
+        success, output = self._run_command(["git", "status", "--short"])
+        if success:
+            if output:
+                print("📝 Changes:")
+                print(output)
+
+                # Count changes
+                lines = output.strip().split("\n")
+                staged = sum(
+                    1
+                    for line in lines
+                    if line.startswith("A ")
+                    or line.startswith("M ")
+                    or line.startswith("D ")
+                )
+                unstaged = sum(
+                    1
+                    for line in lines
+                    if line.startswith("??")
+                    or line.startswith(" M")
+                    or line.startswith(" D")
+                )
+
+                print(f"\n📊 Summary:")
+                print(f"   • Staged changes: {staged}")
+                print(f"   • Unstaged changes: {unstaged}")
+                print(f"   • Total changes: {len(lines)}")
+            else:
+                print("✅ Working directory clean.")
+        else:
+            print(f"❌ Failed to get Git status: {output}")
+
+        # Get branch info
+        print("\n🌿 Branch Information:")
+        success, output = self._run_command(["git", "branch", "--show-current"])
+        if success:
+            current_branch = output.strip()
+            print(f"   Current branch: {current_branch}")
+        else:
+            print("   ❌ Could not determine current branch")
+
+        # Get remote info
+        success, output = self._run_command(["git", "remote", "-v"])
+        if success and output:
+            print("\n📡 Remote repositories:")
+            print(output)
+        else:
+            print("\n📡 No remote repositories configured.")
+
+    def _git_helpers(self) -> None:
+        """Git initialization and setup helpers."""
+        Utils.clear_screen()
+        Utils.print_header("GIT INITIALIZATION HELPERS")
+
+        current_dir = os.getcwd()
+
+        print("\n🔧 Git Setup Options:")
+        print("1. Initialize Git repository")
+        print("2. Set up .gitignore (if not exists)")
+        print("3. Create initial commit")
+        print("4. Add remote repository")
+        print("5. Back")
+
+        choice = input("\nSelect option (1-5): ").strip()
+
+        if choice == "1":
+            self._git_init()
+        elif choice == "2":
+            self._setup_gitignore()
+        elif choice == "3":
+            self._initial_commit()
+        elif choice == "4":
+            self._add_remote()
+        elif choice == "5":
+            return
+        else:
+            print("❌ Invalid option.")
+
+    def _git_init(self) -> None:
+        """Initialize Git repository."""
+        current_dir = os.getcwd()
+
+        # Check if already a Git repo
+        git_dir = os.path.join(current_dir, ".git")
+        if os.path.exists(git_dir):
+            print("✅ Git repository already initialized.")
+            return
+
+        print(f"📍 Directory: {current_dir}")
+        confirm = input("\nInitialize Git repository here? (y/n): ").lower()
+        if confirm != "y":
+            print("❌ Operation cancelled.")
+            return
+
+        success, output = self._run_command(["git", "init"])
+        if success:
+            print("✅ Git repository initialized successfully!")
+            print(f"📁 .git directory created at: {git_dir}")
+        else:
+            print(f"❌ Failed to initialize Git: {output}")
+
+    def _setup_gitignore(self) -> None:
+        """Set up .gitignore file."""
+        gitignore_path = os.path.join(os.getcwd(), ".gitignore")
+
+        if os.path.exists(gitignore_path):
+            print("✅ .gitignore already exists.")
+            self._show_gitignore()
+            return
+
+        self._create_gitignore_template(gitignore_path)
+
+    def _initial_commit(self) -> None:
+        """Create initial commit."""
+        # Check if Git repo
+        git_dir = os.path.join(os.getcwd(), ".git")
+        if not os.path.exists(git_dir):
+            print("❌ Not a Git repository.")
+            init = input("Initialize Git first? (y/n): ").lower()
+            if init == "y":
+                self._git_init()
+            else:
+                return
+
+        # Check if already has commits
+        success, output = self._run_command(["git", "log", "--oneline"])
+        if success and output:
+            print("⚠️  Repository already has commits.")
+            view = input("View commit history? (y/n): ").lower()
+            if view == "y":
+                print("\n📜 Commit history:")
+                print(output)
+            return
+
+        # Stage all files
+        print("\n📦 Staging files...")
+        success, output = self._run_command(["git", "add", "."])
+        if not success:
+            print(f"❌ Failed to stage files: {output}")
+            return
+
+        # Get staged files
+        success, output = self._run_command(["git", "status", "--short"])
+        if success and output:
+            staged_files = len(output.strip().split("\n"))
+            print(f"✅ Staged {staged_files} files")
+        else:
+            print("⚠️  No files to commit")
+            return
+
+        # Get commit message
+        print("\n📝 Commit message:")
+        print("1. Initial commit")
+        print("2. Project setup")
+        print("3. First commit")
+        print("4. Custom message")
+
+        msg_choice = input("\nSelect message (1-4): ").strip()
+
+        if msg_choice == "1":
+            message = "Initial commit"
+        elif msg_choice == "2":
+            message = "Project setup"
+        elif msg_choice == "3":
+            message = "First commit"
+        elif msg_choice == "4":
+            message = input("Enter commit message: ").strip()
+            if not message:
+                print("❌ Commit message cannot be empty.")
+                return
+        else:
+            message = "Initial commit"
+
+        # Create commit
+        print(f"\n💾 Creating commit: '{message}'")
+        success, output = self._run_command(["git", "commit", "-m", message])
+
+        if success:
+            print("✅ Initial commit created successfully!")
+
+            # Show commit info
+            success, output = self._run_command(["git", "log", "--oneline", "-1"])
+            if success:
+                print(f"\n📜 Latest commit: {output.strip()}")
+        else:
+            print(f"❌ Failed to create commit: {output}")
+
+    def _add_remote(self) -> None:
+        """Add remote Git repository."""
+        # Check if Git repo
+        git_dir = os.path.join(os.getcwd(), ".git")
+        if not os.path.exists(git_dir):
+            print("❌ Not a Git repository.")
+            return
+
+        # Check existing remotes
+        success, output = self._run_command(["git", "remote", "-v"])
+        if success and output:
+            print("📡 Existing remotes:")
+            print(output)
+
+        print("\n➕ Add Remote Repository")
+        print("Common Git hosting services:")
+        print("1. GitHub")
+        print("2. GitLab")
+        print("3. Bitbucket")
+        print("4. Custom URL")
+
+        service_choice = input("\nSelect service (1-4): ").strip()
+
+        if service_choice == "1":
+            username = input("GitHub username: ").strip()
+            repo_name = input("Repository name: ").strip()
+            url = f"https://github.com/{username}/{repo_name}.git"
+        elif service_choice == "2":
+            username = input("GitLab username: ").strip()
+            repo_name = input("Repository name: ").strip()
+            url = f"https://gitlab.com/{username}/{repo_name}.git"
+        elif service_choice == "3":
+            username = input("Bitbucket username: ").strip()
+            repo_name = input("Repository name: ").strip()
+            url = f"https://bitbucket.org/{username}/{repo_name}.git"
+        elif service_choice == "4":
+            url = input("Remote URL: ").strip()
+            if not url:
+                print("❌ URL cannot be empty.")
+                return
+        else:
+            print("❌ Invalid choice.")
+            return
+
+        name = input("Remote name [origin]: ").strip()
+        if not name:
+            name = "origin"
+
+        print(f"\n🔗 Adding remote: {name} -> {url}")
+        confirm = input("Continue? (y/n): ").lower()
+        if confirm != "y":
+            print("❌ Operation cancelled.")
+            return
+
+        success, output = self._run_command(["git", "remote", "add", name, url])
+
+        if success:
+            print(f"✅ Remote '{name}' added successfully!")
+
+            # Verify remote
+            success, output = self._run_command(["git", "remote", "-v"])
+            if success:
+                print("\n📡 Updated remote list:")
+                print(output)
+        else:
+            print(f"❌ Failed to add remote: {output}")
+
+    def _get_python_gitignore(self) -> str:
+        """Get Python-specific .gitignore template."""
+        return """# Byte-compiled / optimized / DLL files
+        pycache/
+        *.py[cod]
+        *$py.class
+
+        C extensions
+        *.so
+
+        Distribution / packaging
+        .Python
+        build/
+        develop-eggs/
+        dist/
+        downloads/
+        eggs/
+        .eggs/
+        lib/
+        lib64/
+        parts/
+        sdist/
+        var/
+        wheels/
+        share/python-wheels/
+        *.egg-info/
+        .installed.cfg
+        *.egg
+        MANIFEST
+
+        PyInstaller
+        Usually these files are written by a python script from a template
+        before PyInstaller builds the exe, so as to inject date/other infos into it.
+        *.manifest
+        *.spec
+
+        Installer logs
+        pip-log.txt
+        pip-delete-this-directory.txt
+
+        Unit test / coverage reports
+        htmlcov/
+        .tox/
+        .nox/
+        .coverage
+        .coverage.*
+        .cache
+        nosetests.xml
+        coverage.xml
+        *.cover
+        *.py,cover
+        .hypothesis/
+        .pytest_cache/
+        cover/
+
+        Translations
+        *.mo
+        *.pot
+
+        Django stuff:
+        *.log
+        local_settings.py
+        db.sqlite3
+        db.sqlite3-journal
+
+        Flask stuff:
+        instance/
+        .webassets-cache
+
+        Scrapy stuff:
+        .scrapy
+
+        Sphinx documentation
+        docs/_build/
+
+        PyBuilder
+        .pybuilder/
+        target/
+
+        Jupyter Notebook
+        .ipynb_checkpoints
+
+        IPython
+        profile_default/
+        ipython_config.py
+
+        pyenv
+        For a library or package, you might want to ignore these files since the code is
+        intended to run in multiple environments; otherwise, check them in:
+        .python-version
+        pipenv
+        According to pypa/pipenv#598, it is recommended to include Pipfile.lock in version control.
+        However, in case of collaboration, if having platform-specific dependencies or dependencies
+        having no cross-platform support, pipenv may install dependencies that don't work, or not
+        install all needed dependencies.
+        #Pipfile.lock
+
+        poetry
+        Similar to Pipfile.lock, it is generally recommended to include poetry.lock in version control.
+        This is especially recommended for binary packages to ensure reproducibility, and is more
+        commonly ignored for libraries.
+        https://python-poetry.org/docs/basic-usage/#commit-your-poetrylock-file-to-version-control
+        #poetry.lock
+
+        pdm
+        Similar to Pipfile.lock, it is generally recommended to include pdm.lock in version control.
+        #pdm.lock
+
+        pdm stores project-wide configurations in .pdm.toml, but it is recommended to not include it
+        in version control.
+        https://pdm.fming.dev/#use-with-ide
+        .pdm.toml
+
+        PEP 582; used by e.g. github.com/David-OConnor/pyflow and github.com/pdm-project/pdm
+        pypackages/
+
+        Celery stuff
+        celerybeat-schedule
+        celerybeat.pid
+
+        SageMath parsed files
+        *.sage.py
+
+        Environments
+        .env
+        .venv
+        env/
+        venv/
+        ENV/
+        env.bak/
+        venv.bak/
+
+        Spyder project settings
+        .spyderproject
+        .spyproject
+
+        Rope project settings
+        .ropeproject
+
+        mkdocs documentation
+        /site
+
+        mypy
+        .mypy_cache/
+        .dmypy.json
+        dmypy.json
+
+        Pyre type checker
+        .pyre/
+
+        pytype static type analyzer
+        .pytype/
+
+        Cython debug symbols
+        cython_debug/
+
+        PyCharm
+        .idea/
+        *.iws
+        *.iml
+        *.ipr
+
+        VS Code
+        .vscode/
+        *.code-workspace
+
+        Operating System files
+        .DS_Store
+        .DS_Store?
+        ._*
+        .Spotlight-V100
+        .Trashes
+        ehthumbs.db
+        Thumbs.db
+
+        Custom project files
+        *.log
+        logs/
+        temp/
+        tmp/
+        *.tmp
+        *.temp
+        """
+
+    def _get_django_gitignore(self) -> str:
+        """Get Django-specific .gitignore template."""
+        python_ignore = self._get_python_gitignore()
+        django_specific = """
+        Django specific
+        *.log
+        *.pot
+        *.pyc
+        db.sqlite3
+        db.sqlite3-journal
+        media/
+        staticfiles/
+        .env
+        .env.local
+        .env..local
+
+        Local settings
+        settings/local.py
+        settings/dev.py
+
+        Celery
+        celerybeat-schedule.*
+
+        Coverage
+        .coverage
+        .coverage.*
+        htmlcov/
+
+        PyTest
+        .pytest_cache/
+        """
+        return python_ignore + django_specific
+
+    def _get_nodejs_gitignore(self) -> str:
+        """Get Node.js-specific .gitignore template."""
+        return """# Logs
+        logs
+        .log
+        npm-debug.log
+        yarn-debug.log*
+        yarn-error.log*
+        lerna-debug.log*
+
+        Diagnostic reports (https://nodejs.org/api/report.html)
+        report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+        Runtime data
+        pids
+        *.pid
+        *.seed
+        *.pid.lock
+
+        Directory for instrumented libs generated by jscoverage/JSCover
+        lib-cov
+
+        Coverage directory used by tools like istanbul
+        coverage
+        *.lcov
+
+        nyc test coverage
+        .nyc_output
+
+        Grunt intermediate storage (https://gruntjs.com/creating-plugins#storing-task-files)
+        .grunt
+
+        Bower dependency directory (https://bower.io/)
+        bower_components
+
+        node-waf configuration
+        .lock-wscript
+
+        Compiled binary addons (https://nodejs.org/api/addons.html)
+        build/Release
+
+        Dependency directories
+        node_modules/
+        jspm_packages/
+
+        TypeScript v1 declaration files
+        typings/
+
+        TypeScript cache
+        *.tsbuildinfo
+
+        Optional npm cache directory
+        .npm
+
+        Optional eslint cache
+        .eslintcache
+
+        Microbundle cache
+        .rpt2_cache/
+        .rts2_cache_cjs/
+        .rts2_cache_es/
+        .rts2_cache_umd/
+
+        Optional REPL history
+        .node_repl_history
+
+        Output of 'npm pack'
+        *.tgz
+
+        Yarn Integrity file
+        .yarn-integrity
+
+        dotenv environment variables file
+        .env
+        .env.test
+
+        parcel-bundler cache (https://parceljs.org/)
+        .cache
+        .parcel-cache
+
+        Next.js build output
+        .next
+
+        Nuxt.js build / generate output
+        .nuxt
+        dist
+
+        Gatsby files
+        .cache/
+
+        Comment in the public line in if your project uses Gatsby and not Next.js
+        https://nextjs.org/blog/next-9-1#public-directory-support
+        public
+        Storybook build outputs
+        .out
+        .storybook-out
+
+        RollupJS default build output
+        dist/
+
+        SvelteKit build outputs
+        .svelte-kit
+
+        Vite build outputs
+        dist/
+
+        Temporary folders
+        tmp/
+        temp/
+
+        Operating System files
+        .DS_Store
+        .DS_Store?
+        ._*
+        .Spotlight-V100
+        .Trashes
+        ehthumbs.db
+        Thumbs.db
+        """
+
+    def _get_general_gitignore(self) -> str:
+        """Get general .gitignore template."""
+        return """# Operating System files
+        .DS_Store
+        .DS_Store?
+        ._*
+        .Spotlight-V100
+        .Trashes
+        ehthumbs.db
+        Thumbs.db
+
+        Editor files
+        .vscode/
+        .idea/
+        *.swp
+        *.swo
+        *~
+        *.bak
+
+        Log files
+        *.log
+        logs/
+
+        Temporary files
+        *.tmp
+        *.temp
+        tmp/
+        temp/
+
+        Environment files
+        .env
+        .env.local
+        .env.*.local
+
+        Build outputs
+        build/
+        dist/
+        *.exe
+        *.dll
+        *.so
+        *.dylib
+
+        Dependency directories
+        node_modules/
+        vendor/
+        """
+
+    def _extract_from_pyproject(self, pyproject_path: str) -> Optional[str]:
+        """Extract dependencies from pyproject.toml.
+
+        Args:
+            pyproject_path: Path to pyproject.toml.
+
+        Returns:
+            Dependencies as string or None.
+        """
+        try:
+            import tomli
+        except ImportError:
+            print("⚠️  tomli not installed. Installing...")
+            success, _ = self._run_command(
+                [sys.executable, "-m", "pip", "install", "tomli"]
+            )
+            if not success:
+                print("❌ Failed to install tomli")
+                return None
+            import tomli
+
+        try:
+            with open(pyproject_path, "r", encoding="utf-8") as f:
+                data = tomli.loads(f.read())
+
+            dependencies = []
+
+            # Check for dependencies in various sections
+            if "project" in data and "dependencies" in data["project"]:
+                dependencies.extend(data["project"]["dependencies"])
+
+            if (
+                "tool" in data
+                and "poetry" in data["tool"]
+                and "dependencies" in data["tool"]["poetry"]
+            ):
+                deps = data["tool"]["poetry"]["dependencies"]
+                for dep, version in deps.items():
+                    if dep.lower() != "python":
+                        if isinstance(version, str):
+                            dependencies.append(f"{dep}{version}")
+                        else:
+                            dependencies.append(dep)
+
+            if dependencies:
+                return "\n".join(sorted(set(dependencies)))
+            else:
+                print("ℹ️  No dependencies found in pyproject.toml")
+                return None
+
+        except Exception as e:
+            print(f"❌ Error reading pyproject.toml: {e}")
+            return None
+
+    @staticmethod
+    def _get_current_timestamp() -> str:
+        """Get current timestamp string.
+
+        Returns:
+            Formatted timestamp.
+        """
+        from datetime import datetime
+
+        return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    @staticmethod
+    def _format_size(size_bytes: int) -> str:
+        """Format size in human readable format.
+
+        Args:
+            size_bytes: Size in bytes.
+
+        Returns:
+            Formatted size string.
+        """
+        for unit in ["B", "KB", "MB", "GB"]:
+            if size_bytes < 1024.0:
+                return f"{size_bytes:.1f} {unit}"
+            size_bytes /= 1024.0
+        return f"{size_bytes:.1f} TB"
+
+    def _run_command(self, cmd: list, shell: bool = False) -> Tuple[bool, str]:
+        """Run a shell command.
+
+        Args:
+            cmd: Command list.
+            shell: Whether to use shell.
+
+        Returns:
+            (success, output)
+        """
+        try:
+            result = subprocess.run(
+                cmd,
+                shell=shell,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="ignore",
+            )
+
+            if result.returncode == 0:
+                return True, result.stdout.strip()
+            else:
+                error_msg = (
+                    result.stderr.strip() or result.stdout.strip() or "Unknown error"
+                )
+                return False, error_msg
+
+        except FileNotFoundError:
+            return False, f"Command not found: {' '.join(cmd)}"
+        except Exception as e:
+            return False, str(e)
